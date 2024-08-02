@@ -1,6 +1,6 @@
 import express, { Response, Request } from "express";
 import { body, validationResult } from "express-validator";
-import cognitoService from "../services/cognito.service";
+import CognitoService from "../services/cognito.service";
 
 class AuthController {
   public path = "/auth";
@@ -16,43 +16,65 @@ class AuthController {
     this.router.post("/verify", this.validateBody("verify"), this.verify);
   }
 
-  private signUp(req: Request, res: Response) {
-    const result = validationResult(req);
-    console.log(result);
-    if (!result.isEmpty()) {
-      return res.status(422).json({ errors: result.array() });
-    }
-    const cognito = new cognitoService();
-
-    const { password, email} =
-      req.body;
-
-    cognito.signUpUser(email, password)
-        .then(success => {
-          success ? res.status(200).end() : res.status(400).end()
-        })
-
-    return res.status(200).end();
-  }
-
-  private signIn(req: Request, res: Response) {
-    const result = validationResult(req);
-    console.log(result);
-    if (!result.isEmpty()) {
-      return res.status(422).json({ errors: result.array() });
-    }
-    console.log("Sign in body is valid");
-    return res.status(200).end();
-  }
-
-  private verify(req: Request, res: Response) {
+  private signUp = async (req: Request, res: Response) => {
     const result = validationResult(req);
     if (!result.isEmpty()) {
       return res.status(422).json({ errors: result.array() });
     }
-    console.log("Verify body is valid");
-    return res.status(200).end();
-  }
+    const { email, password } = req.body;
+    const cognito = new CognitoService();
+
+    try {
+      const response = await cognito.signUpUser(email, password);
+      if (response.success) {
+        return res.status(201).json({ message: "Sign up successful", data: response.data });
+      } else {
+        return res.status(400).json({ message: "Sign up failed", error: response.error });
+      }
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error", error });
+    }
+  };
+
+  private signIn = async (req: Request, res: Response) => {
+    const result = validationResult(req);
+    if (!result.isEmpty()) {
+      return res.status(422).json({ errors: result.array() });
+    }
+    const { email, password } = req.body;
+    const cognito = new CognitoService();
+
+    try {
+      const response = await cognito.signInUser(email, password);
+      if (response.success) {
+        return res.status(200).json({ message: "Sign in successful", data: response.data });
+      } else {
+        return res.status(400).json({ message: "Sign in failed", error: response.error });
+      }
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error", error });
+    }
+  };
+
+  private verify = async (req: Request, res: Response) => {
+    const result = validationResult(req);
+    if (!result.isEmpty()) {
+      return res.status(422).json({ errors: result.array() });
+    }
+    const { email, code } = req.body;
+    const cognito = new CognitoService();
+
+    try {
+      const response = await cognito.verifyAccount(email, code);
+      if (response.success) {
+        return res.status(200).json({ message: "Account verification successful", data: response.data });
+      } else {
+        return res.status(400).json({ message: "Account verification failed", error: response.error });
+      }
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error", error });
+    }
+  };
 
   private validateBody(type: string) {
     switch (type) {

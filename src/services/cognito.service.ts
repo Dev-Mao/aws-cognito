@@ -1,7 +1,15 @@
-import AWS from "aws-sdk";
-import crypto from "crypto";
+import { 
+  CognitoIdentityProviderClient, 
+  SignUpCommand, 
+  InitiateAuthCommand, 
+  ConfirmSignUpCommand, 
+  CognitoIdentityProviderServiceException,
+  AuthFlowType,
+  InitiateAuthCommandInput
+} from "@aws-sdk/client-cognito-identity-provider";
+import { createHmac } from "crypto";
 
-class cognitoService {
+class CognitoService {
   private config = {
     region: "us-east-2",
   };
@@ -9,37 +17,103 @@ class cognitoService {
     "1r9s8jh9b094o4hgg28vie27mor86puc4t3olooi7l38po66bd68";
   private clientId: string = "1ivim9nngl630jrennbtsp7ba";
 
-  private cognitoIdentity: AWS.CognitoIdentityServiceProvider;
+  private cognitoIdentity: CognitoIdentityProviderClient;
 
   constructor() {
-    this.cognitoIdentity = new AWS.CognitoIdentityServiceProvider(this.config);
+    this.cognitoIdentity = new CognitoIdentityProviderClient(this.config);
   }
 
-  public async signUpUser(username: string, password: string): Promise<boolean> {
-    
-    var params = {
-      ClientId: this.clientId, 
-      Password: password, 
-      Username: username, 
-      SecretHash: this.generateHash(username),
-    }
+  public async signUpUser(
+    email: string,
+    password: string
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    error?: CognitoIdentityProviderServiceException;
+  }> {
+    const params = {
+      ClientId: this.clientId,
+      Password: password,
+      Username: email,
+      SecretHash: this.generateHash(email),
+    };
 
     try {
-      const data = await this.cognitoIdentity.signUp(params).promise()
-      console.log(data)
-      return true
+      const command = new SignUpCommand(params);
+      const data = await this.cognitoIdentity.send(command);
+      console.log(data);
+      return { success: true, data: data };
     } catch (error) {
-      console.log(error)
-      return false
+      console.log(error);
+      return {
+        success: false,
+        error: error as CognitoIdentityProviderServiceException,
+      };
+    }
+  }
+
+  public async signInUser(
+    email: string, 
+    password: string
+  ): Promise<{ 
+    success: boolean; 
+    data?: any; 
+    error?: CognitoIdentityProviderServiceException 
+  }> {
+    const params: InitiateAuthCommandInput = {
+      AuthFlow: "USER_PASSWORD_AUTH" as AuthFlowType,
+      ClientId: this.clientId,
+      AuthParameters: {
+        USERNAME: email,
+        PASSWORD: password,
+        SECRET_HASH: this.generateHash(email),
+      },
+    };
+
+    try {
+      const command = new InitiateAuthCommand(params);
+      const data = await this.cognitoIdentity.send(command);
+      return { success: true, data: data };
+    } catch (error) {
+      console.log(error);
+      return { success: false, error: error as CognitoIdentityProviderServiceException };
+    }
+  }
+
+  public async verifyAccount(
+    email: string,
+    code: string
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    error?: CognitoIdentityProviderServiceException;
+  }> {
+    const params = {
+      ClientId: this.clientId,
+      ConfirmationCode: code,
+      Username: email,
+      SecretHash: this.generateHash(email),
+    };
+
+    try {
+      const command = new ConfirmSignUpCommand(params);
+      const data = await this.cognitoIdentity.send(command);
+      console.log(data);
+      return { success: true, data: data };
+    } catch (error) {
+      console.log(error);
+      return {
+        success: false,
+        error: error as CognitoIdentityProviderServiceException,
+      };
     }
   }
 
   private generateHash = (username: string): string => {
-    return crypto
-      .createHmac("sha256", this.secretHash)
+    return createHmac("sha256", this.secretHash)
       .update(username + this.clientId)
       .digest("base64");
   };
 }
 
-export default cognitoService;
+export default CognitoService;
